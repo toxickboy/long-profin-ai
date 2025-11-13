@@ -8,7 +8,7 @@ load_dotenv()
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
-from llm.model import InferenceResponse, InvestmentDecision, PriceRange
+from llm.model import InferenceResponse, InvestmentDecision
 from llm.prompt import SYSTEM_PROMPT
 
 
@@ -34,7 +34,7 @@ def get_signals(ticker: str) -> InferenceResponse:
     )
     
     # Initialize LLM chain inside function
-    llm = ChatOpenAI(model_name="gpt-4o")  # Fixed: was "gpt-5"
+    llm = ChatOpenAI(model_name="gpt-5")  
     prompt = ChatPromptTemplate.from_template(SYSTEM_PROMPT)
     output_parser = JsonOutputParser(pydantic_object=InferenceResponse)
     chain = prompt | llm | output_parser

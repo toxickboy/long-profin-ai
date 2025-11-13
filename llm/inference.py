@@ -1,26 +1,26 @@
 """Stock signal inference module"""
 from typing import Optional
 from dotenv import load_dotenv
+import json
 
 load_dotenv()
 
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
-from llm.model import InferenceResponse, InvestmentDecision
+from llm.model import InferenceResponse, InvestmentDecision, PriceRange
 from llm.prompt import SYSTEM_PROMPT
 
 
-def get_signals(ticker: str, available_funds: Optional[float] = None) -> InferenceResponse:
+def get_signals(ticker: str) -> InferenceResponse:
     """
-    Analyze a stock and return investment signals.
+    Analyze a stock and return investment recommendation.
     
     Args:
         ticker: Stock ticker symbol
-        available_funds: Optional available funds for allocation
         
     Returns:
-        InferenceResponse with investment decision
+        InferenceResponse with buy/avoid decision, price range, and holding period
     """
     # Import analysis functions inside function to avoid module-level import failures
     from analysis.fundamental_analysis import (
@@ -30,12 +30,11 @@ def get_signals(ticker: str, available_funds: Optional[float] = None) -> Inferen
         get_sentiment,
         get_risk_metrics,
         get_peer_comparison,
-        get_earnings_forecast,
-        get_toon_summary
+        get_earnings_forecast
     )
     
     # Initialize LLM chain inside function
-    llm = ChatOpenAI(model_name="gpt-5")
+    llm = ChatOpenAI(model_name="gpt-4o")  # Fixed: was "gpt-5"
     prompt = ChatPromptTemplate.from_template(SYSTEM_PROMPT)
     output_parser = JsonOutputParser(pydantic_object=InferenceResponse)
     chain = prompt | llm | output_parser
@@ -48,23 +47,35 @@ def get_signals(ticker: str, available_funds: Optional[float] = None) -> Inferen
     risk = get_risk_metrics(ticker)
     peers = get_peer_comparison(ticker)
     earnings = get_earnings_forecast(ticker)
-    toon_summary = get_toon_summary(
-        ticker=ticker,
-        profile=stock_profile,
-        fundamentals=fundamentals,
-        technicals=technicals,
-        sentiment=sentiment,
-        risk=risk,
-        peers=peers,
-        earnings=earnings
-    )
+    
+    # Create structured data dictionary instead of toon_summary
+    structured_data = {
+        "ticker": ticker,
+        "company": stock_profile.get('company'),
+        "sector": stock_profile.get('sector'),
+        "fundamentals": {
+            "valuation": fundamentals.get('valuation', {}),
+            "profitability": fundamentals.get('profitability', {}),
+            "dividends": fundamentals.get('dividends', {})
+        },
+        "technicals": technicals,
+        "sentiment": sentiment,
+        "risk": risk,
+        "peers": peers,
+        "earnings": earnings
+    }
 
-    print("Toon Summary:", toon_summary)
+    print("Structured Data:", json.dumps(structured_data, indent=2, default=str))
 
+    # Debug: Print what we're sending to the LLM
+    print(f"\n=== Analyzing Ticker: {ticker} ===\n")
+    
     response = chain.invoke({
         "ticker": ticker,
-        "available_funds": str(available_funds) if available_funds else "not mentioned",
-        "toon_summary": toon_summary
+        "stock_data": json.dumps(structured_data, indent=2, default=str)
     })
-
+    
+    print(f"\n=== AI Response ===")
+    print(json.dumps(response, indent=2, default=str))
+    
     return InferenceResponse(**response)
